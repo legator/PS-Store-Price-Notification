@@ -1,19 +1,11 @@
-# Secrets
-.env
+# Secrets — config.yaml may contain a real NPSSO token; use config.yaml.example instead
+config.yaml
 
-# Python
-data/*.log
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
-*.egg-info/
-dist/
+# Runtime data (prices DB, token cache, logs)
+data/
 
-# .NET
+# .NET build outputs
 bin/
 obj/
 publish/
 *.user
-/data

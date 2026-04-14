@@ -10,7 +10,6 @@
     <RootNamespace>PSPriceNotification</RootNamespace>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>false</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>
