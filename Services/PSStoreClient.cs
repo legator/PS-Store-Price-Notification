@@ -61,7 +61,6 @@ public sealed class PSStoreClient : IDisposable
         _http.DefaultRequestHeaders.Add("DNT", "1");
     }
 
-    // ─── Public API ──────────────────────────────────────────────────────────
     public string GetStoreUrl(string gameId, string idType, string country)
     {
         var locale = Locales.TryGetValue(country, out var l) ? l : "en-us";
@@ -84,7 +83,6 @@ public sealed class PSStoreClient : IDisposable
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
 
-            // Attach Bearer token when authenticated — enables PS Plus prices
             var token = _auth?.AccessToken;
             if (token != null)
                 request.Headers.Authorization =

@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 using PSPriceNotification.Models;
 
 namespace PSPriceNotification.Services;
@@ -20,7 +20,6 @@ public sealed class PriceStorage : IDisposable
         InitSchema();
     }
 
-    // ─── Public API ──────────────────────────────────────────────────────────
 
     public PriceInfo? GetLastPrice(string gameId, string country)
     {
@@ -100,7 +99,6 @@ public sealed class PriceStorage : IDisposable
 
     public void Dispose() => _conn.Dispose();
 
-    // ─── Internals ───────────────────────────────────────────────────────────
 
     private void InitSchema()
     {

@@ -5,14 +5,12 @@ using Spectre.Console;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-// ─── Banner ───────────────────────────────────────────────────────────────────
 AnsiConsole.Write(new FigletText("PS Price Watch").LeftJustified().Color(Color.DeepSkyBlue1));
 AnsiConsole.MarkupLine("[grey]PlayStation Store price monitor — github.com/legator/PS-Store-Price-Notification[/]");
 AnsiConsole.WriteLine();
 
 if (args.Contains("--help") || args.Contains("-h")) { PrintHelp(); return; }
 
-// ─── Bootstrap ───────────────────────────────────────────────────────────────
 var config  = LoadConfig(args);
 Logger.Configure(config.Logging.File, config.Logging.Level);
 
@@ -26,7 +24,6 @@ const string FavoritesPath = "favorites.json";
 var favorites  = LoadFavorites(FavoritesPath);
 var countries  = ResolveCountries(args, config, locales);
 
-// ─── Cancellation ────────────────────────────────────────────────────────────
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -39,18 +36,15 @@ AppDomain.CurrentDomain.ProcessExit += (_, _) =>
     try { cts.Cancel(); } catch (ObjectDisposedException) { }
 };
 
-// ─── PSN auth + wishlist ──────────────────────────────────────────────────────
 PsnAuthService? auth = await AuthenticateAsync(config, cts.Token);
 favorites = await MergeWishlistAsync(favorites, config, locales, cts.Token);
 
-// ─── Guard ───────────────────────────────────────────────────────────────────
 if (favorites.Count == 0)
 {
     AnsiConsole.MarkupLine($"[yellow]No games found in {FavoritesPath} (and PSN wishlist is empty) — nothing to check.[/]");
     return;
 }
 
-// ─── Run ─────────────────────────────────────────────────────────────────────
 AnsiConsole.MarkupLine(
     $"Checking [bold]{favorites.Count}[/] game(s) across [bold]{countries.Count}[/] country/countries " +
     $"([bold]{config.Checking.MaxConcurrency}[/] parallel)...\n");
@@ -65,10 +59,6 @@ var (totalChecked, totalChanges, summaryRows) =
 storage.Save();
 PrintSummaryTable(summaryRows, totalChecked, totalChanges);
 Logger.Info($"Done. Checked {totalChecked} game*country pairs, found {totalChanges} price change(s).");
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Local functions
-// ═════════════════════════════════════════════════════════════════════════════
 
 static void PrintHelp()
 {

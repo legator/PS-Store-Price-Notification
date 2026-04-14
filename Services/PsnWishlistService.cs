@@ -1,24 +1,10 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using HtmlAgilityPack;
 using PSPriceNotification.Models;
 
 namespace PSPriceNotification.Services;
 
-/// <summary>
-/// Fetches the user's PS Store wishlist using their NPSSO session cookie.
-///
-/// How to get your NPSSO token (same as for PsnAuthService):
-///   1. Log in at https://www.playstation.com in your browser.
-///   2. Visit https://ca.account.sony.com/api/v1/ssocookie in the same browser.
-///   3. Copy the 64-character npsso value and paste it into config.yaml under account.npsso.
-///
-/// The wishlist items are extracted from the __NEXT_DATA__ Apollo cache in the
-/// PS Store wishlist page (store.playstation.com/{locale}/wishlist).
-///
-/// Silently returns an empty list on any failure so the app keeps working via
-/// the local favorites.json.
-/// </summary>
 public sealed class PsnWishlistService : IDisposable
 {
     private const string StoreBaseUrl = "https://store.playstation.com";
@@ -46,7 +32,6 @@ public sealed class PsnWishlistService : IDisposable
         _http.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
     }
 
-    // ─── Public API ──────────────────────────────────────────────────────────
     public async Task<List<GameEntry>> GetWishlistAsync(
         string locale = "en-us",
         CancellationToken ct = default)
@@ -55,7 +40,6 @@ public sealed class PsnWishlistService : IDisposable
         {
             var url = $"{StoreBaseUrl}/{locale}/wishlist";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            // NPSSO is the PS Store session SSO cookie — use it for web page authentication
             request.Headers.Add("Cookie", $"npsso={_npsso}");
 
             Logger.Debug($"Fetching PSN wishlist from {url}");
@@ -79,7 +63,6 @@ public sealed class PsnWishlistService : IDisposable
         }
     }
 
-    // ─── HTML + __NEXT_DATA__ parsing ─────────────────────────────────────────
     internal static List<GameEntry> ParseWishlistFromHtml(string html)
     {
         if (string.IsNullOrWhiteSpace(html)) return [];
@@ -134,7 +117,6 @@ public sealed class PsnWishlistService : IDisposable
                 if (element.TryGetProperty("items", out var items))
                 {
                     CollectItems(items, result, seen, depth + 1);
-                    // also continue scanning siblings for other wishlist entries
                 }
 
                 if (TryExtractEntry(element, out var entry) && entry != null)
@@ -142,7 +124,7 @@ public sealed class PsnWishlistService : IDisposable
                     var key = entry.ConceptId ?? entry.ProductId!;
                     if (seen.Add(key))
                         result.Add(entry);
-                    return; // found a leaf entry — don't recurse further into it
+                    return;
                 }
 
                 foreach (var prop in element.EnumerateObject())
