@@ -18,7 +18,7 @@ checking:
   # Primary country — always checked first regardless of the countries list.
   primary_country: ua
 
-  # Countries to monitor. Omit (or comment out) to check ALL 55 supported countries.
+  # Countries to monitor. Omit (or comment out) to check ALL 69 supported countries.
   # Supported codes: us, ca, gb, de, fr, es, it, nl, br, mx, ar, au, jp, hk, sg, kr, ua, ...
   # countries:
   #   - ua
