@@ -82,7 +82,7 @@ public sealed class PSStoreClient : IDisposable
 
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
 
             // Attach Bearer token when authenticated — enables PS Plus prices
             var token = _auth?.AccessToken;
