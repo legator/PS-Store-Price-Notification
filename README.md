@@ -1,5 +1,7 @@
 # PS Title Price Notification
 
+![Build & Test](https://github.com/yourname/PS-TitlePriceNotification/actions/workflows/build.yml/badge.svg)
+
 Monitors PlayStation Store prices for your favourite games across **all PS Store countries** and sends a **Windows 10/11 system notification** whenever a price drops or changes.
 
 Built with **.NET 10** and scheduled daily via Windows Task Scheduler.
