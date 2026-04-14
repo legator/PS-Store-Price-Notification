@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Windows 10 1809+ required for toast notifications -->
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PSPriceNotification</AssemblyName>
+    <RootNamespace>PSPriceNotification</RootNamespace>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Exclude the test project subdirectory from main project compilation -->
+    <Compile Remove="PSPriceNotification.Tests\**" />
+    <EmbeddedResource Remove="PSPriceNotification.Tests\**" />
+    <None Remove="PSPriceNotification.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- HTML parsing for PS Store page scraping -->
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.67" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
+    <!-- Windows 10/11 toast notifications -->
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+    <!-- YAML config parsing -->
+    <PackageReference Include="YamlDotNet" Version="16.1.3" />
+    <!-- Rich console UI -->
+    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+  </ItemGroup>
+
+</Project>
