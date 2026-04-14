@@ -17,7 +17,7 @@ var config  = LoadConfig(args);
 Logger.Configure(config.Logging.File, config.Logging.Level);
 
 var locales = config.Locales is { Count: > 0 }
-    ? (IReadOnlyDictionary<string, string>)config.Locales
+    ? new Dictionary<string, string>(config.Locales, StringComparer.OrdinalIgnoreCase) as IReadOnlyDictionary<string, string>
     : PSStoreClient.DefaultLocales;
 
 if (args.Contains("--list-countries")) { PrintCountries(locales, config); return; }

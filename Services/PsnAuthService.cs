@@ -122,7 +122,7 @@ public sealed class PsnAuthService : IDisposable
         var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Add("Cookie", $"npsso={_npsso}");
 
-        var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
 
         // Sony sends a 302 redirect; the code is in the Location header
         var location = resp.Headers.Location?.ToString()
@@ -130,14 +130,11 @@ public sealed class PsnAuthService : IDisposable
                 "PSN did not return a redirect. Is your NPSSO valid? " +
                 "Get a fresh one at https://ca.account.sony.com/api/v1/ssocookie");
 
-        if (!location.Contains("?code="))
+        if (!location.Contains("?code=") && !location.Contains("&code="))
             throw new InvalidOperationException(
                 $"Unexpected redirect location (no code parameter): {location}");
 
-        var fragment = location.Split("redirect/").LastOrDefault()
-            ?? throw new InvalidOperationException($"Cannot parse redirect: {location}");
-
-        var code = System.Web.HttpUtility.ParseQueryString(fragment)["code"]
+        var code = System.Web.HttpUtility.ParseQueryString(new Uri(location).Query)["code"]
             ?? throw new InvalidOperationException("Could not extract code from redirect.");
 
         return code;

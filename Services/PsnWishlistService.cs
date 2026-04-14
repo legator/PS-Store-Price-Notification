@@ -59,7 +59,7 @@ public sealed class PsnWishlistService : IDisposable
             request.Headers.Add("Cookie", $"npsso={_npsso}");
 
             Logger.Debug($"Fetching PSN wishlist from {url}");
-            var response = await _http.SendAsync(request, ct);
+            using var response = await _http.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
             {

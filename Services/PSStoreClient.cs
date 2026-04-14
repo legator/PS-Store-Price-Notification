@@ -90,7 +90,7 @@ public sealed class PSStoreClient : IDisposable
                 request.Headers.Authorization =
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-            var response = await _http.SendAsync(request, ct);
+            using var response = await _http.SendAsync(request, ct);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
                 return new PriceInfo(null, null, null, null, false, IsAvailable: false);
