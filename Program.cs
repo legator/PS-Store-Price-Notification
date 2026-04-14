@@ -272,7 +272,13 @@ static async Task<(int TotalChecked, int TotalChanges, List<(string Game, string
                             Interlocked.Increment(ref totalChecked);
 
                             if (price == null)          { skipped.Add(country.ToUpperInvariant()); return; }
-                            if (!price.IsAvailable)     { Logger.Debug($"[{country.ToUpperInvariant()}] Not available"); return; }
+                            if (!price.IsAvailable)
+                            {
+                                Logger.Debug($"[{country.ToUpperInvariant()}] Not available");
+                                lock (storageLock)
+                                    storage.UpdatePrice(game.Id, country, price, game.Name);
+                                return;
+                            }
                             if (price.CurrentPrice == null) Logger.Warn($"[{country.ToUpperInvariant()}] Price could not be parsed");
 
                             bool hasChanged;
