@@ -1,0 +1,14 @@
+# Secrets — config.yaml may contain a real NPSSO token; use config.yaml.example instead
+config.yaml
+
+# Runtime data (prices DB, token cache, logs)
+data/
+
+# VS Code — settings.json may contain personal/security-sensitive preferences
+.vscode/settings.json
+
+# .NET build outputs
+bin/
+obj/
+publish/
+*.user

@@ -1,0 +1,114 @@
+notification:
+  # Windows 10/11 system toast notification (requires no extra setup)
+  windows_toast:
+    enabled: true
+
+account:
+  # Optional PSN account authentication — enables PS Plus pricing and reduces bot-detection.
+  # How to get your NPSSO token:
+  #   1. Log in at https://www.playstation.com in your browser.
+  #   2. Visit https://ca.account.sony.com/api/v1/ssocookie in the same browser.
+  #   3. Copy the 64-character value and paste it below.
+  # Tokens are cached in token_cache_file and refreshed automatically (valid ~2 months).
+  npsso: ""
+  token_cache_file: "data/psn_tokens.json"
+
+
+checking:
+  # Primary country — always checked first regardless of the countries list.
+  primary_country: ua
+
+  # Countries to monitor. Omit (or comment out) to check ALL 69 supported countries.
+  # Supported codes: us, ca, gb, de, fr, es, it, nl, br, mx, ar, au, jp, hk, sg, kr, ua, ...
+  # countries:
+  #   - ua
+  #   - us
+  #   - gb
+
+  # How many countries to fetch simultaneously
+  max_concurrency: 5
+
+  # Seconds to wait inside each concurrent slot before the HTTP request
+  request_delay: 0.5
+
+storage:
+  price_history_db: "data/prices.db"
+  # Number of days to keep price history
+  max_history_days: 90
+
+logging:
+  level: "INFO"
+  file: "data/ps_price_check.log"
+
+# Country code → PS Store locale (language-COUNTRY) used to build store URLs.
+# Run 'Update-Locales.ps1' to refresh this list from the PlayStation country selector.
+locales:
+  ae: en-ae
+  ar: es-ar
+  at: de-at
+  au: en-au
+  be: nl-be
+  bg: bg-bg
+  bh: en-bh
+  bo: es-bo
+  br: pt-br
+  ca: en-ca
+  ch: de-ch
+  cl: es-cl
+  co: es-co
+  cr: es-cr
+  cy: en-cy
+  cz: cs-cz
+  de: de-de
+  dk: da-dk
+  ec: es-ec
+  es: es-es
+  fi: fi-fi
+  fr: fr-fr
+  gb: en-gb
+  gr: el-gr
+  gt: es-gt
+  hk: en-hk
+  hn: es-hn
+  hr: hr-hr
+  hu: hu-hu
+  id: en-id
+  ie: en-ie
+  il: en-il
+  in: en-in
+  it: it-it
+  jo: en-jo
+  jp: ja-jp
+  kr: ko-kr
+  kw: en-kw
+  lu: fr-lu
+  mt: en-mt
+  mx: es-mx
+  my: en-my
+  ni: es-ni
+  nl: nl-nl
+  no: no-no
+  nz: en-nz
+  om: en-om
+  pa: es-pa
+  pe: es-pe
+  ph: en-ph
+  pl: pl-pl
+  pt: pt-pt
+  py: es-py
+  qa: en-qa
+  ro: ro-ro
+  ru: ru-ru
+  sa: en-sa
+  se: sv-se
+  sg: en-sg
+  si: sl-si
+  sk: sk-sk
+  sv: es-sv
+  th: th-th
+  tr: tr-tr
+  tw: zh-hant-tw
+  ua: ru-ua
+  us: en-us
+  uy: es-uy
+  za: en-za

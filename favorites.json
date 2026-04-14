@@ -1,0 +1,25 @@
+{
+  "games": [
+    {
+      "name": "God of War Ragnarök",
+      "concept_id": "10004409",
+      "note": "Find your concept_id from the PS Store URL: store.playstation.com/en-us/concept/10004409"
+    },
+    {
+      "name": "Marvel's Spider-Man 2",
+      "concept_id": "10007040"
+    },
+    {
+      "name": "Hogwarts Legacy",
+      "concept_id": "10007452"
+    },
+    {
+      "name": "Final Fantasy XVI",
+      "concept_id": "10006827"
+    },
+    {
+      "name": "Horizon Forbidden West",
+      "concept_id": "10001435"
+    }
+  ]
+}
