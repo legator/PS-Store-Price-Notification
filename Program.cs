@@ -7,7 +7,7 @@ using YamlDotNet.Serialization.NamingConventions;
 
 // ─── Banner ───────────────────────────────────────────────────────────────────
 AnsiConsole.Write(new FigletText("PS Price Watch").LeftJustified().Color(Color.DeepSkyBlue1));
-AnsiConsole.MarkupLine("[grey]PlayStation Store price monitor — github.com/yourname/PS-TitlePriceNotification[/]");
+AnsiConsole.MarkupLine("[grey]PlayStation Store price monitor — github.com/legator/PS-Store-Price-Notification[/]");
 AnsiConsole.WriteLine();
 
 if (args.Contains("--help") || args.Contains("-h")) { PrintHelp(); return; }
