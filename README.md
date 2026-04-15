@@ -2,9 +2,9 @@
 
 ![Build & Test](https://github.com/yourname/PS-TitlePriceNotification/actions/workflows/build.yml/badge.svg)
 
-Monitors PlayStation Store prices for your favourite games across **all PS Store countries** and sends a **Windows 10/11 system notification** whenever a price drops or changes.
+Monitors PlayStation Store prices for your favourite games across **all PS Store countries**. The core app runs cross-platform on .NET 10, and on Windows it can also send a **native toast notification** whenever a price drops or changes.
 
-Built with **.NET 10** and scheduled daily via Windows Task Scheduler.
+Built with **.NET 10**, with optional Windows toast notifications and OS-specific scheduling helpers.
 
 ---
 
@@ -24,8 +24,8 @@ Built with **.NET 10** and scheduled daily via Windows Task Scheduler.
 
 ## Requirements
 
-- Windows 10 version 1809 or newer (required for toast notifications)
-- [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (or SDK if you want to build from source)
+- Windows, macOS, Linux, or Raspberry Pi OS with a supported [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) or SDK
+- Windows 10 version 1809 or newer if you want native toast notifications
 - Internet access to reach `store.playstation.com`
 
 ---
@@ -47,7 +47,8 @@ Services/
   PriceStorage.cs              ← SQLite history store & change detection
   PsnAuthService.cs            ← PSN OAuth2 (NPSSO → access token + refresh)
   PsnWishlistService.cs        ← PS Store wishlist scraper (NPSSO cookie auth)
-  Notifier.cs                  ← Windows Toast notifications
+  Notifier.cs                  ← cross-platform notification dispatch
+  Notifier.Windows.cs          ← Windows Toast implementation
   Logger.cs                    ← Spectre.Console coloured output + file logger
 PSPriceNotification.Tests/
   Helpers/
@@ -61,8 +62,10 @@ PSPriceNotification.Tests/
     PsnWishlistServiceTests.cs
 config.yaml                    ← countries, delays, notification settings, locales
 favorites.json                 ← your games (add concept IDs here)
-setup_task.ps1                 ← registers the daily Task Scheduler job
+setup_task.ps1                 ← registers the daily Task Scheduler job on Windows
+setup_task.sh                  ← installs a daily launchd/cron job on macOS/Linux
 Update-Locales.ps1             ← updates the locale map in config.yaml from PS Store
+Update-Locales.sh              ← POSIX shell equivalent for macOS/Linux/RPi OS
 ```
 
 ---
@@ -82,13 +85,26 @@ cd PS-TitlePriceNotification
 dotnet test PSPriceNotification.Tests\PSPriceNotification.Tests.csproj
 ```
 
-**Publish** a single self-contained-friendly executable to the `publish\` folder:
+**Publish** a runnable build to the `publish\` folder:
 
 ```powershell
 dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -o publish
 ```
 
-> The project is configured with `PublishSingleFile=true`, so the output is a single `PSPriceNotification.exe` that requires the [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) to be installed on the host.
+Windows-specific publish:
+
+```powershell
+dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -f net10.0-windows10.0.17763.0 -o publish
+```
+
+Cross-platform framework-dependent run/publish:
+
+```sh
+dotnet run --project . --framework net10.0
+dotnet publish PSPriceNotification.csproj -c Release -f net10.0 -o publish
+```
+
+The project uses a cross-platform `net10.0` target for the core app and a Windows-specific target for toast notifications.
 
 ### 2 · Configure `config.yaml`
 
@@ -199,6 +215,36 @@ Get-ScheduledTask -TaskName "PSTitlePriceNotification" | Get-ScheduledTaskInfo
 Unregister-ScheduledTask -TaskName "PSTitlePriceNotification" -Confirm:$false
 ```
 
+### macOS / Linux / Raspberry Pi OS
+
+There is also a POSIX shell scheduler helper:
+
+```sh
+chmod +x ./setup_task.sh
+./setup_task.sh --run-at 08:00
+```
+
+On macOS it installs a per-user `launchd` agent. On Linux and Raspberry Pi OS it installs a per-user `crontab` entry.
+
+If no native non-Windows published binary exists at `publish/PSPriceNotification`, the Unix scheduler falls back to `dotnet run --framework net10.0`.
+
+---
+
+## Update locale map
+
+Windows PowerShell:
+
+```powershell
+.\Update-Locales.ps1 -DryRun
+```
+
+POSIX shell:
+
+```sh
+chmod +x ./Update-Locales.sh
+./Update-Locales.sh --dry-run
+```
+
 ---
 
 ## CLI reference
@@ -234,6 +280,8 @@ Was: $69.99  •  Now: $34.99 (-50%)      [View on PS Store]
 
 Clicking **View on PS Store** opens the game page in your browser.
 
+On non-Windows platforms, notification delivery is currently limited to console and log output.
+
 ---
 
 ## Data storage
@@ -264,7 +312,7 @@ Sony occasionally updates their page structure. If prices are not being detected
 
 ## Unit tests
 
-The test project targets the same Windows TFM as the main project (`net10.0-windows10.0.17763.0`) and uses [xUnit](https://xunit.net/). HTTP calls are intercepted by `FakeHttpMessageHandler` — no network access needed.
+The test project targets `net10.0` and uses [xUnit](https://xunit.net/). HTTP calls are intercepted by `FakeHttpMessageHandler` — no network access needed.
 
 **Run all tests:**
 

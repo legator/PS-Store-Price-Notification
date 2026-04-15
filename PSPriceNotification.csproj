@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- Windows 10 1809+ required for toast notifications -->
-    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <!-- Cross-platform core app + Windows-specific target for toast notifications -->
+    <TargetFrameworks>net10.0;net10.0-windows10.0.17763.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PSPriceNotification</AssemblyName>
@@ -19,17 +19,24 @@
     <None Remove="PSPriceNotification.Tests\**" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-windows10.0.17763.0'">
+    <Compile Remove="Services\Notifier.Windows.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- HTML parsing for PS Store page scraping -->
     <PackageReference Include="HtmlAgilityPack" Version="1.11.67" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
-    <!-- Windows 10/11 toast notifications -->
-    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
     <!-- YAML config parsing -->
     <PackageReference Include="YamlDotNet" Version="16.1.3" />
     <!-- Rich console UI -->
     <PackageReference Include="Spectre.Console" Version="0.49.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.17763.0'">
+    <!-- Windows 10/11 toast notifications -->
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
   </ItemGroup>
 
 </Project>

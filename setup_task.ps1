@@ -49,7 +49,7 @@ if (Test-Path $publishedExe) {
     if ($dotnet -and (Test-Path $csproj)) {
         $chosen = @{
             Execute  = $dotnet.Source
-            Argument = "run --project `"$ScriptDir`" --configuration Release"
+            Argument = "run --project `"$ScriptDir`" --configuration Release --framework net10.0-windows10.0.17763.0"
             Label    = ".NET (dotnet run)"
         }
     } else {
