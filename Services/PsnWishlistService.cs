@@ -4,7 +4,7 @@ using PSPriceNotification.Models;
 
 namespace PSPriceNotification.Services;
 
-public sealed class PsnWishlistService : IDisposable
+public sealed class PsnWishlistService
 {
     private const string WishlistUrl = "https://library.playstation.com/wishlist";
 
@@ -23,7 +23,7 @@ public sealed class PsnWishlistService : IDisposable
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, WishlistUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, WishlistUrl);
             request.Headers.Add("Cookie", $"npsso={_npsso}");
 
             Logger.Debug($"Fetching PSN wishlist from {WishlistUrl}");
@@ -168,6 +168,4 @@ public sealed class PsnWishlistService : IDisposable
         el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
-
-    public void Dispose() { }
 }

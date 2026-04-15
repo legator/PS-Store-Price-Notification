@@ -192,7 +192,7 @@ static async Task<List<GameEntry>> MergeWishlistAsync(
 {
     if (string.IsNullOrWhiteSpace(config.Account.Npsso)) return favorites;
 
-    using var svc     = new PsnWishlistService(config.Account.Npsso);
+    var svc = new PsnWishlistService(config.Account.Npsso);
     var wishlistItems = await svc.GetWishlistAsync(ct);
 
     if (wishlistItems.Count == 0)
