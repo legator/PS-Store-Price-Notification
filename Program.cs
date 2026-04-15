@@ -5,6 +5,8 @@ using Spectre.Console;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
+Console.OutputEncoding = System.Text.Encoding.UTF8;
+
 AnsiConsole.Write(new FigletText("PS Price Watch").LeftJustified().Color(Color.DeepSkyBlue1));
 AnsiConsole.MarkupLine("[grey]PlayStation Store price monitor — github.com/legator/PS-Store-Price-Notification[/]");
 AnsiConsole.WriteLine();
@@ -13,6 +15,13 @@ if (args.Contains("--help") || args.Contains("-h")) { PrintHelp(); return; }
 
 var config  = LoadConfig(args);
 Logger.Configure(config.Logging.File, config.Logging.Level);
+
+if (args.Contains("--stats"))
+{
+    using var statsStorage = new PriceStorage(config.Storage.PriceHistoryDb, config.Storage.MaxHistoryDays);
+    PrintStatistics(statsStorage.GetStatistics(), config.Storage.PriceHistoryDb);
+    return;
+}
 
 var locales = config.Locales is { Count: > 0 }
     ? new Dictionary<string, string>(config.Locales, StringComparer.OrdinalIgnoreCase) as IReadOnlyDictionary<string, string>
@@ -37,7 +46,7 @@ AppDomain.CurrentDomain.ProcessExit += (_, _) =>
 };
 
 PsnAuthService? auth = await AuthenticateAsync(config, cts.Token);
-favorites = await MergeWishlistAsync(favorites, config, locales, cts.Token);
+favorites = await MergeWishlistAsync(favorites, config, cts.Token);
 
 if (favorites.Count == 0)
 {
@@ -53,10 +62,21 @@ using var client  = new PSStoreClient(locales, auth);
 using var storage = new PriceStorage(config.Storage.PriceHistoryDb, config.Storage.MaxHistoryDays);
 var notifier      = new Notifier(config.Notification);
 
-var (totalChecked, totalChanges, summaryRows) =
+var startedAtUtc = DateTime.UtcNow;
+
+var (totalChecked, totalChanges, totalSkipped, summaryRows) =
     await RunChecksAsync(favorites, countries, locales, config, client, storage, notifier, cts.Token);
 
 storage.Save();
+storage.RecordRun(
+    startedAtUtc,
+    DateTime.UtcNow,
+    favorites.Count,
+    countries.Count,
+    totalChecked,
+    totalChanges,
+    totalSkipped,
+    cts.IsCancellationRequested);
 PrintSummaryTable(summaryRows, totalChecked, totalChanges);
 Logger.Info($"Done. Checked {totalChecked} game*country pairs, found {totalChanges} price change(s).");
 
@@ -66,6 +86,7 @@ static void PrintHelp()
         "[bold]Usage:[/] PSPriceNotification [[options]]\n\n" +
         "[deepskyblue1]--countries[/] CODE,CODE,...  Check only these country codes\n" +
         "[deepskyblue1]--list-countries[/]           Print all supported country codes and locales\n" +
+        "[deepskyblue1]--stats[/]                    Show execution and price history statistics\n" +
         "[deepskyblue1]--config[/] FILE              Config file path [grey](default: config.yaml)[/]\n" +
         "[deepskyblue1]--help[/]                     Show this help")
     {
@@ -167,16 +188,12 @@ static async Task<PsnAuthService?> AuthenticateAsync(AppConfig config, Cancellat
 static async Task<List<GameEntry>> MergeWishlistAsync(
     List<GameEntry> favorites,
     AppConfig config,
-    IReadOnlyDictionary<string, string> locales,
     CancellationToken ct)
 {
     if (string.IsNullOrWhiteSpace(config.Account.Npsso)) return favorites;
 
-    var primary        = config.Checking.PrimaryCountry?.ToLowerInvariant();
-    var wishlistLocale = primary != null && locales.TryGetValue(primary, out var pl) ? pl : "en-us";
-
     using var svc     = new PsnWishlistService(config.Account.Npsso);
-    var wishlistItems = await svc.GetWishlistAsync(wishlistLocale, ct);
+    var wishlistItems = await svc.GetWishlistAsync(ct);
 
     if (wishlistItems.Count == 0)
     {
@@ -208,7 +225,7 @@ static async Task<List<GameEntry>> MergeWishlistAsync(
     return favorites;
 }
 
-static async Task<(int TotalChecked, int TotalChanges, List<(string Game, string Country, string OldPrice, string NewPrice, bool Changed)> Rows)>
+static async Task<(int TotalChecked, int TotalChanges, int TotalSkipped, List<(string Game, string Country, string OldPrice, string NewPrice, bool Changed)> Rows)>
     RunChecksAsync(
         List<GameEntry> games,
         List<string> countries,
@@ -221,6 +238,7 @@ static async Task<(int TotalChecked, int TotalChanges, List<(string Game, string
 {
     int totalChecked = 0;
     int totalChanges = 0;
+    int totalSkipped = 0;
     var summaryRows  = new List<(string Game, string Country, string OldPrice, string NewPrice, bool Changed)>();
     var storageLock  = new object();
 
@@ -296,6 +314,7 @@ static async Task<(int TotalChecked, int TotalChanges, List<(string Game, string
                 });
 
             summaryRows.AddRange(perGameRows);
+            totalSkipped += skipped.Count;
 
             if (!skipped.IsEmpty)
                 AnsiConsole.MarkupLine(
@@ -307,7 +326,88 @@ static async Task<(int TotalChecked, int TotalChanges, List<(string Game, string
         AnsiConsole.MarkupLine("[yellow]Run cancelled.[/]");
     }
 
-    return (totalChecked, totalChanges, summaryRows);
+    return (totalChecked, totalChanges, totalSkipped, summaryRows);
+}
+
+static void PrintStatistics(StorageStatistics stats, string dbPath)
+{
+    AnsiConsole.MarkupLine($"[grey]Statistics from {Markup.Escape(dbPath)}[/]");
+    AnsiConsole.WriteLine();
+
+    var runTable = new Table()
+        .Border(TableBorder.Rounded)
+        .Title("[bold yellow] Execution History [/]" )
+        .AddColumn("[bold]Metric[/]")
+        .AddColumn("[bold]Value[/]");
+
+    runTable.AddRow("Runs", stats.Runs.TotalRuns.ToString());
+    runTable.AddRow("Completed", stats.Runs.CompletedRuns.ToString());
+    runTable.AddRow("Cancelled", stats.Runs.CancelledRuns.ToString());
+    runTable.AddRow("Checked pairs", stats.Runs.TotalCheckedPairs.ToString());
+    runTable.AddRow("Price changes", stats.Runs.TotalChanges.ToString());
+    runTable.AddRow("Avg pairs / run", stats.Runs.AverageCheckedPairsPerRun.ToString("0.0"));
+    runTable.AddRow("Avg duration", FormatDuration(stats.Runs.AverageDurationSeconds));
+    runTable.AddRow("First run", FormatTimestamp(stats.Runs.FirstRunAtUtc));
+    runTable.AddRow("Last run", FormatTimestamp(stats.Runs.LastRunAtUtc));
+    AnsiConsole.Write(runTable);
+    AnsiConsole.WriteLine();
+
+    var snapshotTable = new Table()
+        .Border(TableBorder.Rounded)
+        .Title("[bold yellow] Price History [/]" )
+        .AddColumn("[bold]Metric[/]")
+        .AddColumn("[bold]Value[/]");
+
+    snapshotTable.AddRow("Snapshots", stats.Snapshots.TotalSnapshots.ToString());
+    snapshotTable.AddRow("Titles tracked", stats.Snapshots.TitlesTracked.ToString());
+    snapshotTable.AddRow("Countries tracked", stats.Snapshots.CountriesTracked.ToString());
+    snapshotTable.AddRow("Game-country pairs", stats.Snapshots.GameCountryPairsTracked.ToString());
+    snapshotTable.AddRow("Unavailable snapshots", stats.Snapshots.UnavailableSnapshots.ToString());
+    snapshotTable.AddRow("Discounted snapshots", stats.Snapshots.DiscountedSnapshots.ToString());
+    snapshotTable.AddRow("First snapshot", FormatTimestamp(stats.Snapshots.FirstSnapshotAtUtc));
+    snapshotTable.AddRow("Last snapshot", FormatTimestamp(stats.Snapshots.LastSnapshotAtUtc));
+    AnsiConsole.Write(snapshotTable);
+    AnsiConsole.WriteLine();
+
+    if (stats.TopDiscounts.Count > 0)
+    {
+        var discountsTable = new Table()
+            .Border(TableBorder.Rounded)
+            .Title("[bold yellow] Top Recorded Discounts [/]" )
+            .AddColumn("[bold]Game[/]")
+            .AddColumn(new TableColumn("[bold]Country[/]").Centered())
+            .AddColumn("[bold]Discount[/]")
+            .AddColumn("[bold]Price[/]")
+            .AddColumn("[bold]Recorded[/]");
+
+        foreach (var discount in stats.TopDiscounts)
+        {
+            var price = discount.CurrentPrice != null && discount.BasePrice != null
+                ? $"{discount.CurrentPrice} (was {discount.BasePrice})"
+                : discount.CurrentPrice ?? discount.BasePrice ?? "N/A";
+
+            discountsTable.AddRow(
+                Markup.Escape(discount.GameName),
+                $"[deepskyblue1]{discount.Country}[/]",
+                $"[bold green]-{discount.DiscountPercent}%[/]",
+                Markup.Escape(price),
+                Markup.Escape(FormatTimestamp(discount.TimestampUtc)));
+        }
+
+        AnsiConsole.Write(discountsTable);
+        AnsiConsole.WriteLine();
+    }
+}
+
+static string FormatTimestamp(DateTime? timestampUtc) =>
+    timestampUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+
+static string FormatDuration(double seconds)
+{
+    var duration = TimeSpan.FromSeconds(seconds);
+    return duration.TotalMinutes >= 1
+        ? $"{(int)duration.TotalMinutes}m {duration.Seconds}s"
+        : $"{duration.TotalSeconds:0.0}s";
 }
 
 static void PrintSummaryTable(

@@ -233,22 +233,34 @@ public class PsnWishlistServiceTests
     }
 
     [Fact]
-    public void ExtractWishlistItems_IgnoresPromotionalEntries()
+    public void ExtractWishlistItems_KeepsEntriesRegardlessOfEditorialName()
     {
-        // PS Store injects editorial banners like "[PROMO] Spring Sale 26 - Web - Header"
-        // alongside real wishlist items — they must be filtered out.
         var json = JsonDocument.Parse("""
             {
               "items": [
-                { "displayName": "[PROMO] Spring Sale 26 - Web - Header", "conceptId": "123456" },
-                { "displayName": "Real Game", "conceptId": "789012" }
+                { "displayName": "[PROMO] Spring Sale 26 - Web - Header",                           "conceptId": "100001" },
+                { "displayName": "See More",                                                         "conceptId": "100002" },
+                { "displayName": "See All",                                                          "conceptId": "100003" },
+                { "displayName": "PS Plus - Learn More - CTA",                                      "conceptId": "100004" },
+                { "displayName": "Pre-orders - Strand",                                             "conceptId": "100005" },
+                { "displayName": "Top 10 Games in your Country",                                    "conceptId": "100006" },
+                { "displayName": "Discover PlayStation Plus",                                       "conceptId": "100007" },
+                { "displayName": "Global Web Store",                                                "conceptId": "100008" },
+                { "displayName": "Enjoy hundreds of PS5, PS4 and classic PlayStation games, online multiplayer, and more.", "conceptId": "100009" },
+                { "displayName": "Latest - New Games - Web - Header",                               "conceptId": "100010" },
+                { "displayName": "Real Game",                                                        "conceptId": "200001" },
+                { "displayName": "Gothic 1 Remake",                                                  "conceptId": "200002" }
               ]
             }
             """);
 
         var result = PsnWishlistService.ExtractWishlistItems(json.RootElement);
 
-        Assert.Single(result);
-        Assert.Equal("Real Game", result[0].Name);
+        Assert.Equal(12, result.Count);
+        Assert.Contains(result, r => r.Name == "[PROMO] Spring Sale 26 - Web - Header");
+        Assert.Contains(result, r => r.Name == "See More");
+        Assert.Contains(result, r => r.Name == "PS Plus - Learn More - CTA");
+        Assert.Contains(result, r => r.Name == "Real Game");
+        Assert.Contains(result, r => r.Name == "Gothic 1 Remake");
     }
 }

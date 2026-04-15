@@ -104,7 +104,7 @@ checking:
     - de
     - jp
 
-  primary_country: us   # checked first, determines wishlist locale
+  primary_country: us   # checked first for pricing output/order
   request_delay: 2.0    # seconds between PS Store requests (avoid rate limiting)
   max_concurrency: 5    # parallel requests per game
 ```

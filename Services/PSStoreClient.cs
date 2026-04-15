@@ -40,17 +40,23 @@ public sealed class PSStoreClient : IDisposable
 
     private readonly HttpClient _http;
     private readonly PsnAuthService? _auth;
+    private readonly bool _ownsHttpClient;
 
     public IReadOnlyDictionary<string, string> Locales { get; }
 
     public PSStoreClient(IReadOnlyDictionary<string, string>? locales = null, PsnAuthService? auth = null)
-        : this(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All }, locales, auth)
-    { }
+    {
+        Locales = locales ?? DefaultLocales;
+        _auth = auth;
+        _http = PlayStationHttp.BrowserClient;
+        _ownsHttpClient = false;
+    }
 
     internal PSStoreClient(HttpMessageHandler handler, IReadOnlyDictionary<string, string>? locales = null, PsnAuthService? auth = null)
     {
         Locales = locales ?? DefaultLocales;
         _auth   = auth;
+        _ownsHttpClient = true;
         _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
         _http.DefaultRequestHeaders.Add("User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -126,6 +132,10 @@ public sealed class PSStoreClient : IDisposable
         }
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose()
+    {
+        if (_ownsHttpClient)
+            _http.Dispose();
+    }
 }
 

@@ -7,10 +7,10 @@ namespace PSPriceNotification.Services;
 
 public sealed class PsnWishlistService : IDisposable
 {
-    private const string StoreBaseUrl = "https://store.playstation.com";
+    private const string WishlistUrl = "https://library.playstation.com/wishlist";
 
     private readonly string _npsso;
-    private readonly HttpClient _http;
+    private readonly HttpClient _http = PlayStationHttp.BrowserClient;
 
     public PsnWishlistService(string npsso)
     {
@@ -18,31 +18,16 @@ public sealed class PsnWishlistService : IDisposable
             throw new ArgumentException("NPSSO must not be empty.", nameof(npsso));
 
         _npsso = npsso;
-
-        var handler = new HttpClientHandler
-        {
-            AutomaticDecompression = DecompressionMethods.All,
-        };
-        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-        _http.DefaultRequestHeaders.Add("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-        _http.DefaultRequestHeaders.Add("Accept",
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        _http.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
     }
 
-    public async Task<List<GameEntry>> GetWishlistAsync(
-        string locale = "en-us",
-        CancellationToken ct = default)
+    public async Task<List<GameEntry>> GetWishlistAsync(CancellationToken ct = default)
     {
         try
         {
-            var url = $"{StoreBaseUrl}/{locale}/wishlist";
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            var request = new HttpRequestMessage(HttpMethod.Get, WishlistUrl);
             request.Headers.Add("Cookie", $"npsso={_npsso}");
 
-            Logger.Debug($"Fetching PSN wishlist from {url}");
+            Logger.Debug($"Fetching PSN wishlist from {WishlistUrl}");
             using var response = await _http.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
@@ -148,9 +133,6 @@ public sealed class PsnWishlistService : IDisposable
 
         if (string.IsNullOrWhiteSpace(name)) return false;
 
-        // Skip editorial/promotional entries injected by the PS Store (e.g. "[PROMO] Spring Sale 26 - Web - Header")
-        if (name.StartsWith('[') && name.IndexOf(']') is > 1 and < 12) return false;
-
         var conceptId = GetStr(el, "conceptId");
         var productId = GetStr(el, "productId");
 
@@ -188,5 +170,5 @@ public sealed class PsnWishlistService : IDisposable
             ? v.GetString()
             : null;
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose() { }
 }

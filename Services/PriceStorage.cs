@@ -97,6 +97,135 @@ public sealed class PriceStorage : IDisposable
 
     public void Save() { }
 
+    public void RecordRun(
+        DateTime startedAtUtc,
+        DateTime completedAtUtc,
+        int totalGames,
+        int totalCountries,
+        int totalChecked,
+        int totalChanges,
+        int totalSkipped,
+        bool cancelled)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO run_history
+                (started_at, completed_at, total_games, total_countries,
+                 total_checked, total_changes, total_skipped, cancelled)
+            VALUES
+                (@startedAt, @completedAt, @totalGames, @totalCountries,
+                 @totalChecked, @totalChanges, @totalSkipped, @cancelled)
+            """;
+        cmd.Parameters.AddWithValue("@startedAt", startedAtUtc.ToString("O"));
+        cmd.Parameters.AddWithValue("@completedAt", completedAtUtc.ToString("O"));
+        cmd.Parameters.AddWithValue("@totalGames", totalGames);
+        cmd.Parameters.AddWithValue("@totalCountries", totalCountries);
+        cmd.Parameters.AddWithValue("@totalChecked", totalChecked);
+        cmd.Parameters.AddWithValue("@totalChanges", totalChanges);
+        cmd.Parameters.AddWithValue("@totalSkipped", totalSkipped);
+        cmd.Parameters.AddWithValue("@cancelled", cancelled ? 1 : 0);
+        cmd.ExecuteNonQuery();
+    }
+
+    public StorageStatistics GetStatistics(int topDiscountLimit = 5)
+    {
+        RunStatistics runs;
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT
+                    COUNT(*),
+                    SUM(CASE WHEN cancelled = 0 THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN cancelled != 0 THEN 1 ELSE 0 END),
+                    COALESCE(SUM(total_checked), 0),
+                    COALESCE(SUM(total_changes), 0),
+                    COALESCE(AVG(total_checked), 0.0),
+                    COALESCE(AVG((julianday(completed_at) - julianday(started_at)) * 86400.0), 0.0),
+                    MIN(started_at),
+                    MAX(completed_at)
+                FROM run_history
+                """;
+
+            using var reader = cmd.ExecuteReader();
+            reader.Read();
+            runs = new RunStatistics(
+                reader.GetInt32(0),
+                reader.IsDBNull(1) ? 0 : reader.GetInt32(1),
+                reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
+                reader.GetInt32(3),
+                reader.GetInt32(4),
+                reader.GetDouble(5),
+                reader.GetDouble(6),
+                ParseTimestamp(reader, 7),
+                ParseTimestamp(reader, 8));
+        }
+
+        SnapshotStatistics snapshots;
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT
+                    COUNT(*),
+                    COUNT(DISTINCT game_id),
+                    COUNT(DISTINCT country),
+                    COUNT(DISTINCT game_id || '|' || country),
+                    COALESCE(SUM(CASE WHEN is_available = 0 THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN discount_percent IS NOT NULL AND discount_percent > 0 THEN 1 ELSE 0 END), 0),
+                    MIN(timestamp),
+                    MAX(timestamp)
+                FROM price_history
+                """;
+
+            using var reader = cmd.ExecuteReader();
+            reader.Read();
+            snapshots = new SnapshotStatistics(
+                reader.GetInt32(0),
+                reader.GetInt32(1),
+                reader.GetInt32(2),
+                reader.GetInt32(3),
+                reader.GetInt32(4),
+                reader.GetInt32(5),
+                ParseTimestamp(reader, 6),
+                ParseTimestamp(reader, 7));
+        }
+
+        var topDiscounts = new List<DiscountStat>();
+        using (var cmd = _conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT
+                    game_name,
+                    game_id,
+                    country,
+                    discount_percent,
+                    discounted_price,
+                    base_price,
+                    timestamp
+                FROM price_history
+                WHERE is_available = 1 AND discount_percent IS NOT NULL AND discount_percent > 0
+                ORDER BY discount_percent DESC, timestamp DESC
+                LIMIT @limit
+                """;
+            cmd.Parameters.AddWithValue("@limit", topDiscountLimit);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var gameName = reader.IsDBNull(0) ? null : reader.GetString(0);
+                var gameId = reader.GetString(1);
+                topDiscounts.Add(new DiscountStat(
+                    string.IsNullOrWhiteSpace(gameName) ? gameId : gameName,
+                    reader.GetString(2).ToUpperInvariant(),
+                    reader.GetInt32(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    ParseTimestamp(reader, 6)));
+            }
+        }
+
+        return new StorageStatistics(runs, snapshots, topDiscounts);
+    }
+
     public void Dispose() => _conn.Dispose();
 
 
@@ -120,10 +249,29 @@ public sealed class PriceStorage : IDisposable
                 is_free          INTEGER NOT NULL,
                 is_available     INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS run_history (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at      TEXT    NOT NULL,
+                completed_at    TEXT    NOT NULL,
+                total_games     INTEGER NOT NULL,
+                total_countries INTEGER NOT NULL,
+                total_checked   INTEGER NOT NULL,
+                total_changes   INTEGER NOT NULL,
+                total_skipped   INTEGER NOT NULL,
+                cancelled       INTEGER NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_game_country_ts
                 ON price_history(game_id, country, timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_run_history_started_at
+                ON run_history(started_at DESC);
             """;
         cmd.ExecuteNonQuery();
+    }
+
+    private static DateTime? ParseTimestamp(SqliteDataReader reader, int index)
+    {
+        if (reader.IsDBNull(index)) return null;
+        return DateTime.Parse(reader.GetString(index), null, System.Globalization.DateTimeStyles.RoundtripKind);
     }
 
     private void Prune(string gameId, string country)
@@ -140,3 +288,37 @@ public sealed class PriceStorage : IDisposable
         cmd.ExecuteNonQuery();
     }
 }
+
+public sealed record RunStatistics(
+    int TotalRuns,
+    int CompletedRuns,
+    int CancelledRuns,
+    int TotalCheckedPairs,
+    int TotalChanges,
+    double AverageCheckedPairsPerRun,
+    double AverageDurationSeconds,
+    DateTime? FirstRunAtUtc,
+    DateTime? LastRunAtUtc);
+
+public sealed record SnapshotStatistics(
+    int TotalSnapshots,
+    int TitlesTracked,
+    int CountriesTracked,
+    int GameCountryPairsTracked,
+    int UnavailableSnapshots,
+    int DiscountedSnapshots,
+    DateTime? FirstSnapshotAtUtc,
+    DateTime? LastSnapshotAtUtc);
+
+public sealed record DiscountStat(
+    string GameName,
+    string Country,
+    int DiscountPercent,
+    string? CurrentPrice,
+    string? BasePrice,
+    DateTime? TimestampUtc);
+
+public sealed record StorageStatistics(
+    RunStatistics Runs,
+    SnapshotStatistics Snapshots,
+    IReadOnlyList<DiscountStat> TopDiscounts);
