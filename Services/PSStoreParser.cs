@@ -1,19 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 using PSPriceNotification.Models;
 
 namespace PSPriceNotification.Services;
 
-/// <summary>
-/// Pure HTML parsing logic for PlayStation Store product pages.
-/// Separated from PSStoreClient so it can be unit-tested without making HTTP calls.
-///
-/// Three strategies are tried in order:
-///   1. Apollo GraphQL cache embedded in __NEXT_DATA__
-///   2. JSON-LD structured data (schema.org)
-///   3. Raw HTML regex as last resort
-/// </summary>
 internal static class PSStoreParser
 {
     internal static PriceInfo? ParsePrice(string html) =>
@@ -21,7 +12,6 @@ internal static class PSStoreParser
         ?? ParseJsonLd(html)
         ?? ParseRegex(html);
 
-    // ─── Strategy 1: __NEXT_DATA__ Apollo cache ───────────────────────────────
     internal static PriceInfo? ParseApolloCache(string html)
     {
         try
@@ -166,7 +156,6 @@ internal static class PSStoreParser
         return new PriceInfo(basePrice, discountedPrice, currency, discountPercent, isFree, true);
     }
 
-    // ─── Strategy 2: JSON-LD ──────────────────────────────────────────────────
     internal static PriceInfo? ParseJsonLd(string html)
     {
         try
@@ -206,7 +195,6 @@ internal static class PSStoreParser
         return null;
     }
 
-    // ─── Strategy 3: raw regex ────────────────────────────────────────────────
     internal static PriceInfo? ParseRegex(string html)
     {
         string? basePrice = null;
@@ -230,7 +218,6 @@ internal static class PSStoreParser
             true);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
     internal static string? GetStr(JsonElement e, string key) =>
         e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()

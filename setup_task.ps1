@@ -8,8 +8,8 @@
     per day at the configured time.
 
     Execution order:
-      1. publish\PSPriceNotification.exe  (recommended — build with: dotnet publish -c Release -o publish)
-      2. dotnet run --project <dir>        (requires .NET SDK)
+            1. publish\PSPriceNotification.exe  (recommended — build with: dotnet publish -c Release -r win-x64 -f net10.0-windows10.0.17763.0 -o publish)
+            2. dotnet run --project <dir> --framework net10.0-windows10.0.17763.0  (requires .NET SDK)
 
 .PARAMETER RunAt
     Time of day to run the check, e.g. "09:00". Defaults to "09:00".
@@ -49,13 +49,13 @@ if (Test-Path $publishedExe) {
     if ($dotnet -and (Test-Path $csproj)) {
         $chosen = @{
             Execute  = $dotnet.Source
-            Argument = "run --project `"$ScriptDir`" --configuration Release"
+            Argument = "run --project `"$ScriptDir`" --configuration Release --framework net10.0-windows10.0.17763.0"
             Label    = ".NET (dotnet run)"
         }
     } else {
         Write-Error @"
 No executable found. Publish the app first:
-  dotnet publish -c Release -o publish
+    dotnet publish -c Release -r win-x64 -f net10.0-windows10.0.17763.0 -o publish
 or install the .NET SDK so 'dotnet run' is available.
 "@
         exit 1

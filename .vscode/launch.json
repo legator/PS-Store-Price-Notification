@@ -1,0 +1,94 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "PSPriceNotification: Debug App (net10.0)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-app",
+      "program": "${workspaceFolder}/bin/Debug/net10.0/PSPriceNotification.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "PSPriceNotification: Stats (net10.0)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-app",
+      "program": "${workspaceFolder}/bin/Debug/net10.0/PSPriceNotification.dll",
+      "args": [
+        "--stats"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "PSPriceNotification: List Countries (net10.0)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-app",
+      "program": "${workspaceFolder}/bin/Debug/net10.0/PSPriceNotification.dll",
+      "args": [
+        "--list-countries"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "PSPriceNotification: Debug App (Windows TFM)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-app",
+      "program": "${workspaceFolder}/bin/Debug/net10.0-windows10.0.17763.0/PSPriceNotification.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true,
+      "windows": {
+        "program": "${workspaceFolder}/bin/Debug/net10.0-windows10.0.17763.0/PSPriceNotification.dll"
+      }
+    },
+    {
+      "name": "PSPriceNotification: Stats (Windows TFM)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-app",
+      "program": "${workspaceFolder}/bin/Debug/net10.0-windows10.0.17763.0/PSPriceNotification.dll",
+      "args": [
+        "--stats"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true,
+      "windows": {
+        "program": "${workspaceFolder}/bin/Debug/net10.0-windows10.0.17763.0/PSPriceNotification.dll"
+      }
+    },
+    {
+      "name": "PSPriceNotification: List Countries (Windows TFM)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-app",
+      "program": "${workspaceFolder}/bin/Debug/net10.0-windows10.0.17763.0/PSPriceNotification.dll",
+      "args": [
+        "--list-countries"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true,
+      "windows": {
+        "program": "${workspaceFolder}/bin/Debug/net10.0-windows10.0.17763.0/PSPriceNotification.dll"
+      }
+    }
+  ]
+}

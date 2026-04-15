@@ -11,8 +11,22 @@ permissions:
   pull-requests: write
 
 jobs:
+  shell-syntax:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        run: bash -n setup_task.sh Update-Locales.sh
+
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -23,26 +37,28 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore "PSPriceNotification.Tests\PSPriceNotification.Tests.csproj"
+        run: dotnet restore "PSPriceNotification.Tests/PSPriceNotification.Tests.csproj"
 
       - name: Build
-        run: dotnet build "PSPriceNotification.Tests\PSPriceNotification.Tests.csproj" --no-restore -c Release
+        run: dotnet build "PSPriceNotification.Tests/PSPriceNotification.Tests.csproj" --no-restore -c Release
 
       - name: Test
-        run: dotnet test "PSPriceNotification.Tests\PSPriceNotification.Tests.csproj" --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
+        run: dotnet test "PSPriceNotification.Tests/PSPriceNotification.Tests.csproj" --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
         if: always()
         with:
-          name: xUnit Tests
+          name: xUnit Tests (${{ matrix.os }})
           path: "TestResults/test-results.trx"
           reporter: dotnet-trx
 
       - name: Publish executable
-        run: dotnet publish "PSPriceNotification.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+        if: matrix.os == 'windows-latest'
+        run: dotnet publish "PSPriceNotification.csproj" -c Release -r win-x64 -f net10.0-windows10.0.17763.0 --self-contained true -p:PublishSingleFile=true -o publish
 
       - name: Upload artifact
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: PSPriceNotification

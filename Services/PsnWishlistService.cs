@@ -1,30 +1,15 @@
-using System.Net;
-using System.Text.Json;
+﻿using System.Text.Json;
 using HtmlAgilityPack;
 using PSPriceNotification.Models;
 
 namespace PSPriceNotification.Services;
 
-/// <summary>
-/// Fetches the user's PS Store wishlist using their NPSSO session cookie.
-///
-/// How to get your NPSSO token (same as for PsnAuthService):
-///   1. Log in at https://www.playstation.com in your browser.
-///   2. Visit https://ca.account.sony.com/api/v1/ssocookie in the same browser.
-///   3. Copy the 64-character npsso value and paste it into config.yaml under account.npsso.
-///
-/// The wishlist items are extracted from the __NEXT_DATA__ Apollo cache in the
-/// PS Store wishlist page (store.playstation.com/{locale}/wishlist).
-///
-/// Silently returns an empty list on any failure so the app keeps working via
-/// the local favorites.json.
-/// </summary>
-public sealed class PsnWishlistService : IDisposable
+public sealed class PsnWishlistService
 {
-    private const string StoreBaseUrl = "https://store.playstation.com";
+    private const string WishlistUrl = "https://library.playstation.com/wishlist";
 
     private readonly string _npsso;
-    private readonly HttpClient _http;
+    private readonly HttpClient _http = PlayStationHttp.BrowserClient;
 
     public PsnWishlistService(string npsso)
     {
@@ -32,33 +17,16 @@ public sealed class PsnWishlistService : IDisposable
             throw new ArgumentException("NPSSO must not be empty.", nameof(npsso));
 
         _npsso = npsso;
-
-        var handler = new HttpClientHandler
-        {
-            AutomaticDecompression = DecompressionMethods.All,
-        };
-        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-        _http.DefaultRequestHeaders.Add("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-        _http.DefaultRequestHeaders.Add("Accept",
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        _http.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
     }
 
-    // ─── Public API ──────────────────────────────────────────────────────────
-    public async Task<List<GameEntry>> GetWishlistAsync(
-        string locale = "en-us",
-        CancellationToken ct = default)
+    public async Task<List<GameEntry>> GetWishlistAsync(CancellationToken ct = default)
     {
         try
         {
-            var url = $"{StoreBaseUrl}/{locale}/wishlist";
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            // NPSSO is the PS Store session SSO cookie — use it for web page authentication
+            using var request = new HttpRequestMessage(HttpMethod.Get, WishlistUrl);
             request.Headers.Add("Cookie", $"npsso={_npsso}");
 
-            Logger.Debug($"Fetching PSN wishlist from {url}");
+            Logger.Debug($"Fetching PSN wishlist from {WishlistUrl}");
             using var response = await _http.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
@@ -79,7 +47,6 @@ public sealed class PsnWishlistService : IDisposable
         }
     }
 
-    // ─── HTML + __NEXT_DATA__ parsing ─────────────────────────────────────────
     internal static List<GameEntry> ParseWishlistFromHtml(string html)
     {
         if (string.IsNullOrWhiteSpace(html)) return [];
@@ -134,7 +101,6 @@ public sealed class PsnWishlistService : IDisposable
                 if (element.TryGetProperty("items", out var items))
                 {
                     CollectItems(items, result, seen, depth + 1);
-                    // also continue scanning siblings for other wishlist entries
                 }
 
                 if (TryExtractEntry(element, out var entry) && entry != null)
@@ -142,7 +108,7 @@ public sealed class PsnWishlistService : IDisposable
                     var key = entry.ConceptId ?? entry.ProductId!;
                     if (seen.Add(key))
                         result.Add(entry);
-                    return; // found a leaf entry — don't recurse further into it
+                    return;
                 }
 
                 foreach (var prop in element.EnumerateObject())
@@ -165,9 +131,6 @@ public sealed class PsnWishlistService : IDisposable
                 ?? GetStr(el, "titleName");
 
         if (string.IsNullOrWhiteSpace(name)) return false;
-
-        // Skip editorial/promotional entries injected by the PS Store (e.g. "[PROMO] Spring Sale 26 - Web - Header")
-        if (name.StartsWith('[') && name.IndexOf(']') is > 1 and < 12) return false;
 
         var conceptId = GetStr(el, "conceptId");
         var productId = GetStr(el, "productId");
@@ -205,6 +168,4 @@ public sealed class PsnWishlistService : IDisposable
         el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()
             : null;
-
-    public void Dispose() => _http.Dispose();
 }

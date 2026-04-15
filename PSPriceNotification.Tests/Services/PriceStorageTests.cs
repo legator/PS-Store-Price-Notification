@@ -146,6 +146,70 @@ public class PriceStorageTests : IDisposable
         Assert.False(reloaded.HasPriceChanged("GAME001", "us", SamplePrice));
     }
 
+    [Fact]
+    public void GetStatistics_ReturnsZeroedValues_WhenStorageIsEmpty()
+    {
+        var stats = _storage.GetStatistics();
+
+        Assert.Equal(0, stats.Runs.TotalRuns);
+        Assert.Equal(0, stats.Runs.TotalCheckedPairs);
+        Assert.Equal(0, stats.Snapshots.TotalSnapshots);
+        Assert.Empty(stats.TopDiscounts);
+    }
+
+    [Fact]
+    public void GetStatistics_AggregatesRunAndSnapshotHistory()
+    {
+        _storage.UpdatePrice("GAME001", "us", SamplePrice, "Game One");
+        _storage.UpdatePrice("GAME001", "us", DiscountedPrice, "Game One");
+        _storage.UpdatePrice("GAME002", "gb", UnavailablePrice, "Game Two");
+
+        _storage.RecordRun(
+            new DateTime(2026, 4, 15, 8, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 4, 15, 8, 0, 30, DateTimeKind.Utc),
+            totalGames: 2,
+            totalCountries: 2,
+            totalChecked: 4,
+            totalChanges: 1,
+            totalSkipped: 1,
+            cancelled: false);
+        _storage.RecordRun(
+            new DateTime(2026, 4, 15, 9, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 4, 15, 9, 0, 10, DateTimeKind.Utc),
+            totalGames: 2,
+            totalCountries: 1,
+            totalChecked: 1,
+            totalChanges: 0,
+            totalSkipped: 0,
+            cancelled: true);
+
+        var stats = _storage.GetStatistics();
+
+        Assert.Equal(2, stats.Runs.TotalRuns);
+        Assert.Equal(1, stats.Runs.CompletedRuns);
+        Assert.Equal(1, stats.Runs.CancelledRuns);
+        Assert.Equal(5, stats.Runs.TotalCheckedPairs);
+        Assert.Equal(1, stats.Runs.TotalChanges);
+        Assert.Equal(new DateTime(2026, 4, 15, 8, 0, 0, DateTimeKind.Utc), stats.Runs.FirstRunAtUtc);
+        Assert.Equal(new DateTime(2026, 4, 15, 9, 0, 10, DateTimeKind.Utc), stats.Runs.LastRunAtUtc);
+        Assert.InRange(stats.Runs.AverageCheckedPairsPerRun, 2.4, 2.6);
+        Assert.InRange(stats.Runs.AverageDurationSeconds, 19.9, 20.1);
+
+        Assert.Equal(3, stats.Snapshots.TotalSnapshots);
+        Assert.Equal(2, stats.Snapshots.TitlesTracked);
+        Assert.Equal(2, stats.Snapshots.CountriesTracked);
+        Assert.Equal(2, stats.Snapshots.GameCountryPairsTracked);
+        Assert.Equal(1, stats.Snapshots.UnavailableSnapshots);
+        Assert.Equal(1, stats.Snapshots.DiscountedSnapshots);
+
+        var topDiscount = Assert.Single(stats.TopDiscounts);
+        Assert.Equal("Game One", topDiscount.GameName);
+        Assert.Equal("US", topDiscount.Country);
+        Assert.Equal(50, topDiscount.DiscountPercent);
+        Assert.Equal("$19.99", topDiscount.CurrentPrice);
+        Assert.Equal("$39.99", topDiscount.BasePrice);
+    }
+
     // ─── Pruning ──────────────────────────────────────────────────────────────
 
     [Fact]
