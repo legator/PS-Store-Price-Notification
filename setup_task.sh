@@ -161,9 +161,9 @@ install_macos() {
     <key>StartCalendarInterval</key>
     <dict>
       <key>Hour</key>
-            <integer>$HOUR_NUM</integer>
+        <integer>$HOUR_NUM</integer>
       <key>Minute</key>
-            <integer>$MINUTE_NUM</integer>
+        <integer>$MINUTE_NUM</integer>
     </dict>
     <key>WorkingDirectory</key>
     <string>$SCRIPT_DIR</string>

@@ -88,7 +88,7 @@ dotnet test PSPriceNotification.Tests\PSPriceNotification.Tests.csproj
 **Publish** a runnable build to the `publish\` folder:
 
 ```powershell
-dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -o publish
+dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -f net10.0-windows10.0.17763.0 -o publish
 ```
 
 Windows-specific publish:
@@ -182,6 +182,9 @@ To check a game in specific countries only (overrides the global list):
 
 ```powershell
 .\publish\PSPriceNotification.exe
+
+# Or run the cross-platform target directly from source
+dotnet run --project . --framework net10.0
 ```
 
 The first run records baseline prices silently. Subsequent runs compare against stored prices and fire notifications on any change.
