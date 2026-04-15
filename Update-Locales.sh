@@ -48,12 +48,12 @@ if [ ! -f "$CONFIG_PATH" ]; then
     exit 1
 fi
 
-TMP_HTML=$(mktemp)
-TMP_LOCALES=$(mktemp)
-TMP_EXISTING=$(mktemp)
-TMP_DIFF=$(mktemp)
-TMP_BLOCK=$(mktemp)
-TMP_UPDATED=$(mktemp)
+TMP_HTML=$(mktemp "${TMPDIR:-/tmp}/ps-locales.html.XXXXXX")
+TMP_LOCALES=$(mktemp "${TMPDIR:-/tmp}/ps-locales.locales.XXXXXX")
+TMP_EXISTING=$(mktemp "${TMPDIR:-/tmp}/ps-locales.existing.XXXXXX")
+TMP_DIFF=$(mktemp "${TMPDIR:-/tmp}/ps-locales.diff.XXXXXX")
+TMP_BLOCK=$(mktemp "${TMPDIR:-/tmp}/ps-locales.block.XXXXXX")
+TMP_UPDATED=$(mktemp "${TMPDIR:-/tmp}/ps-locales.updated.XXXXXX")
 
 cleanup() {
     rm -f "$TMP_HTML" "$TMP_LOCALES" "$TMP_EXISTING" "$TMP_DIFF" "$TMP_BLOCK" "$TMP_UPDATED"
