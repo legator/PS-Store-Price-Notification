@@ -17,24 +17,24 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 usage() {
-    cat <<'EOF'
+        cat <<'EOF'
 Usage: ./setup_task.sh [--run-at HH:MM] [--task-name NAME]
 
 Installs a per-user scheduled run for PSPriceNotification:
-  macOS           -> launchd LaunchAgent
-  Linux/RPi OS    -> crontab entry
+    macOS           -> launchd LaunchAgent
+    Linux/RPi OS    -> crontab entry
 
 Resolution order:
-  1. ./publish/PSPriceNotification   (native non-Windows published binary)
+    1. ./publish/PSPriceNotification   (native non-Windows published binary)
     2. dotnet run --project <dir>      (using the net10.0 target)
 
 The scheduler prefers a native published binary when present and otherwise falls
 back to dotnet run against the cross-platform framework target.
 
 Options:
-  --run-at HH:MM   Time of day to run the check (default: 09:00)
-  --task-name NAME Scheduler label/name (default: PSTitlePriceNotification)
-  --help           Show this help
+    --run-at HH:MM   Time of day to run the check (default: 09:00)
+    --task-name NAME Scheduler label/name (default: PSTitlePriceNotification)
+    --help           Show this help
 EOF
 }
 
@@ -123,11 +123,11 @@ EOF
             ;;
     esac
 else
-    cat >&2 <<EOF
+        cat >&2 <<EOF
 No runnable target found.
 
 Expected one of:
-  1. $PUBLISHED_BINARY
+    1. $PUBLISHED_BINARY
     2. dotnet on PATH with the net10.0 target available
 EOF
     exit 1

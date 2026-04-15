@@ -85,13 +85,7 @@ cd PS-TitlePriceNotification
 dotnet test PSPriceNotification.Tests\PSPriceNotification.Tests.csproj
 ```
 
-**Publish** a runnable build to the `publish\` folder:
-
-```powershell
-dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -f net10.0-windows10.0.17763.0 -o publish
-```
-
-Windows-specific publish:
+**Publish** a runnable Windows build to the `publish\` folder:
 
 ```powershell
 dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -f net10.0-windows10.0.17763.0 -o publish
