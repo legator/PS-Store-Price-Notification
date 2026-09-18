@@ -88,17 +88,15 @@ dotnet test PSPriceNotification.Tests\PSPriceNotification.Tests.csproj
 **Publish** a runnable Windows build to the `publish\` folder:
 
 ```powershell
-dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -f net10.0-windows10.0.17763.0 -o publish
+dotnet publish PSPriceNotification.csproj -c Release -r win-x64 -o publish
 ```
 
-Cross-platform framework-dependent run/publish:
+Cross-platform run on Linux/macOS:
 
 ```sh
-dotnet run --project . --framework net10.0
-dotnet publish PSPriceNotification.csproj -c Release -f net10.0 -o publish
+dotnet run --project PSPriceNotification.csproj
+dotnet publish PSPriceNotification.csproj -c Release -o publish
 ```
-
-The project uses a cross-platform `net10.0` target for the core app and a Windows-specific target for toast notifications.
 
 ### 2 · Configure `config.yaml`
 

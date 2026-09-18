@@ -5,6 +5,8 @@ namespace PSPriceNotification.Services;
 
 public partial class Notifier
 {
+    static partial void CheckToastSupported(ref bool supported) => supported = true;
+
     static partial void ShowWindowsToast(
         string gameName,
         string country,

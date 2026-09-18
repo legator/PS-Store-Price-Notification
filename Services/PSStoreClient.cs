@@ -1,7 +1,29 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using PSPriceNotification.Models;
 
 namespace PSPriceNotification.Services;
+
+public enum FetchStatus
+{
+    Success,
+    NotAvailable,
+    ErrorPage,
+    RateLimited,
+    HttpError,
+    ParseFailed,
+    NetworkError,
+    UnknownCountry
+}
+
+public sealed record FetchPriceResult(
+    PriceInfo? Price,
+    FetchStatus Status,
+    string Message,
+    HttpStatusCode? StatusCode = null,
+    string? EffectiveUrl = null,
+    string? Diagnosis = null,
+    string? HtmlSnippet = null);
 
 public sealed class PSStoreClient : IDisposable
 {
@@ -73,14 +95,15 @@ public sealed class PSStoreClient : IDisposable
         return $"{BaseUrl}/{locale}/{idType}/{gameId}";
     }
 
-    public async Task<PriceInfo?> GetPriceAsync(
+    public async Task<FetchPriceResult> GetPriceDetailedAsync(
         string gameId, string idType, string country,
         CancellationToken ct = default)
     {
         if (!Locales.TryGetValue(country, out var locale))
         {
-            Logger.Warn($"Unknown country code: {country}");
-            return null;
+            var msg = $"Unknown country code: {country}";
+            Logger.Debug(msg);
+            return new FetchPriceResult(null, FetchStatus.UnknownCountry, msg);
         }
 
         var url = $"{BaseUrl}/{locale}/{idType}/{gameId}";
@@ -96,40 +119,158 @@ public sealed class PSStoreClient : IDisposable
 
             using var response = await _http.SendAsync(request, ct);
 
+            var finalUri = response.RequestMessage?.RequestUri;
+            var effectiveUrl = finalUri?.ToString() ?? url;
+
             if (response.StatusCode == HttpStatusCode.NotFound)
-                return new PriceInfo(null, null, null, null, false, IsAvailable: false);
+            {
+                return new FetchPriceResult(
+                    new PriceInfo(null, null, null, null, false, IsAvailable: false),
+                    FetchStatus.NotAvailable,
+                    $"HTTP 404 Not Found at {effectiveUrl}",
+                    HttpStatusCode.NotFound,
+                    effectiveUrl);
+            }
 
             if (response.StatusCode == (HttpStatusCode)429)
             {
-                Logger.Warn($"Rate limited by PS Store for country {country}");
+                var msg = $"Rate limited by PS Store (HTTP 429) for country {country}";
+                Logger.Debug(msg);
                 await Task.Delay(TimeSpan.FromSeconds(10), ct);
-                return null;
+                return new FetchPriceResult(null, FetchStatus.RateLimited, msg, (HttpStatusCode)429, effectiveUrl);
             }
 
             if (!response.IsSuccessStatusCode)
             {
-                Logger.Warn($"HTTP {(int)response.StatusCode} for {url}");
-                return null;
+                var msg = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase} for {effectiveUrl}";
+                Logger.Debug(msg);
+                return new FetchPriceResult(null, FetchStatus.HttpError, msg, response.StatusCode, effectiveUrl);
+            }
+
+            // Check if redirected to an error page (e.g. regional product ID not in this country's catalog)
+            if (finalUri != null && (finalUri.AbsolutePath.EndsWith("/error") || finalUri.AbsolutePath.Contains("/error/")))
+            {
+                var query = System.Web.HttpUtility.ParseQueryString(finalUri.Query);
+                var statusCode = query["widgetStatusCode"];
+                var errorType = query["widgetErrorType"];
+                var hint = GetRegionalMismatchHint(gameId, country);
+                var hintSuffix = hint != null ? $" — {hint}" : string.Empty;
+                var msg = $"Redirected to error page [code: {statusCode ?? "204"}, error: {errorType ?? "not in catalog"}]{hintSuffix}";
+                Logger.Debug($"[{country.ToUpperInvariant()}] {msg}");
+                return new FetchPriceResult(
+                    new PriceInfo(null, null, null, null, false, IsAvailable: false),
+                    FetchStatus.ErrorPage,
+                    msg,
+                    response.StatusCode,
+                    effectiveUrl);
             }
 
             var html = await response.Content.ReadAsStringAsync(ct);
-            var price = PSStoreParser.ParsePrice(html);
+            var price = PSStoreParser.ParsePriceWithDiagnosis(html, out var diagnosis);
 
             if (price == null)
             {
-                var snippet = html.Length > 200 ? html[..200].Replace('\n', ' ') : html;
-                Logger.Debug($"Could not parse price from page ({url})");
-                Logger.Debug($"Response snippet: {snippet}");
+                var snippet = ExtractSnippet(html);
+                var msg = $"Could not parse price from {effectiveUrl}: {diagnosis}";
+                Logger.Debug($"[{country.ToUpperInvariant()}] {msg}");
+                Logger.Debug($"[{country.ToUpperInvariant()}] Response snippet: {snippet}");
+
+                return new FetchPriceResult(
+                    null,
+                    FetchStatus.ParseFailed,
+                    msg,
+                    response.StatusCode,
+                    effectiveUrl,
+                    diagnosis,
+                    snippet);
             }
 
-            return price;
+            return new FetchPriceResult(
+                price,
+                FetchStatus.Success,
+                "Price retrieved successfully",
+                response.StatusCode,
+                effectiveUrl);
         }
         catch (TaskCanceledException) { throw; }
         catch (Exception ex)
         {
-            Logger.Warn($"HTTP request failed for {url}: {ex.Message}");
-            return null;
+            var msg = $"HTTP request failed for {url}: {ex.Message}";
+            Logger.Warn(msg);
+            return new FetchPriceResult(null, FetchStatus.NetworkError, msg, null, url);
         }
+    }
+
+    public async Task<PriceInfo?> GetPriceAsync(
+        string gameId, string idType, string country,
+        CancellationToken ct = default)
+    {
+        var result = await GetPriceDetailedAsync(gameId, idType, country, ct);
+        return result.Price;
+    }
+
+    private static string ExtractSnippet(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return "<empty>";
+
+        var jsonLdMatch = Regex.Match(html, @"<script[^>]*type=[""']application/ld\+json[""'][^>]*>(.*?)</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        if (jsonLdMatch.Success)
+        {
+            var text = jsonLdMatch.Groups[1].Value.Trim();
+            return text.Length > 300 ? text[..300] + "..." : text;
+        }
+
+        var metaDesc = Regex.Match(html, @"<meta[^>]*name=[""']description[""'][^>]*content=[""']([^""']*)[""']", RegexOptions.IgnoreCase);
+        if (metaDesc.Success && !string.IsNullOrWhiteSpace(metaDesc.Groups[1].Value))
+        {
+            return $"Meta description: {metaDesc.Groups[1].Value}";
+        }
+
+        var cleaned = Regex.Replace(html, @"\s+", " ").Trim();
+        return cleaned.Length > 300 ? cleaned[..300] + "..." : cleaned;
+    }
+
+    private static string? GetRegionalMismatchHint(string gameId, string country)
+    {
+        if (string.IsNullOrEmpty(gameId) || gameId.Length < 2) return null;
+
+        var prefix = gameId[..2].ToUpperInvariant();
+        var c = country.ToLowerInvariant();
+
+        var isEuropePrefix = prefix == "EP";
+        var isAmericasPrefix = prefix == "UP";
+        var isJapanPrefix = prefix == "JP";
+        var isAsiaPrefix = prefix is "HP" or "AP";
+
+        if (!isEuropePrefix && !isAmericasPrefix && !isJapanPrefix && !isAsiaPrefix)
+            return null;
+
+        var isAmericasCountry = c is "us" or "ca" or "mx" or "br" or "ar" or "cl" or "co" or "pe";
+        var isEuropeCountry = c is "gb" or "uk" or "ua" or "de" or "fr" or "es" or "it" or "nl" or "pl" or "pt" or "se" or "no" or "fi" or "dk" or "au" or "nz" or "za" or "in" or "tr" or "cz" or "gr" or "ro" or "hu" or "sk" or "hr" or "bg";
+        var isJapanCountry = c is "jp";
+        var isAsiaCountry = c is "hk" or "tw" or "sg" or "kr" or "my" or "th" or "id";
+
+        if (isEuropePrefix && isAmericasCountry)
+            return $"product ID '{gameId}' has European region prefix '{prefix}' which does not exist in the {country.ToUpperInvariant()} catalog; consider using a universal concept ID or {country.ToUpperInvariant()} product ID";
+        if (isEuropePrefix && isJapanCountry)
+            return $"product ID '{gameId}' has European region prefix '{prefix}' which does not exist in the Japan catalog; consider using a universal concept ID or JP product ID";
+        if (isEuropePrefix && isAsiaCountry)
+            return $"product ID '{gameId}' has European region prefix '{prefix}' which does not exist in the Asian catalog; consider using a universal concept ID or Asian product ID";
+
+        if (isAmericasPrefix && isEuropeCountry)
+            return $"product ID '{gameId}' has Americas region prefix '{prefix}' which does not exist in the {country.ToUpperInvariant()} catalog; consider using a universal concept ID or European product ID";
+        if (isAmericasPrefix && isJapanCountry)
+            return $"product ID '{gameId}' has Americas region prefix '{prefix}' which does not exist in the Japan catalog; consider using a universal concept ID or JP product ID";
+        if (isAmericasPrefix && isAsiaCountry)
+            return $"product ID '{gameId}' has Americas region prefix '{prefix}' which does not exist in the Asian catalog; consider using a universal concept ID or Asian product ID";
+
+        if (isJapanPrefix && !isJapanCountry)
+            return $"product ID '{gameId}' has Japan region prefix '{prefix}' which does not exist in the {country.ToUpperInvariant()} catalog; consider using a universal concept ID or {country.ToUpperInvariant()} product ID";
+
+        if (isAsiaPrefix && !isAsiaCountry)
+            return $"product ID '{gameId}' has Asian region prefix '{prefix}' which does not exist in the {country.ToUpperInvariant()} catalog; consider using a universal concept ID or {country.ToUpperInvariant()} product ID";
+
+        return null;
     }
 
     public void Dispose()

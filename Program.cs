@@ -13,7 +13,7 @@ AnsiConsole.WriteLine();
 
 if (args.Contains("--help") || args.Contains("-h")) { PrintHelp(); return; }
 
-var config  = LoadConfig(args);
+var config = LoadConfig(args);
 Logger.Configure(config.Logging.File, config.Logging.Level);
 
 if (args.Contains("--stats"))
@@ -30,8 +30,8 @@ var locales = config.Locales is { Count: > 0 }
 if (args.Contains("--list-countries")) { PrintCountries(locales, config); return; }
 
 const string FavoritesPath = "favorites.json";
-var favorites  = LoadFavorites(FavoritesPath);
-var countries  = ResolveCountries(args, config, locales);
+var favorites = LoadFavorites(FavoritesPath);
+var countries = ResolveCountries(args, config, locales);
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -58,9 +58,16 @@ AnsiConsole.MarkupLine(
     $"Checking [bold]{favorites.Count}[/] game(s) across [bold]{countries.Count}[/] country/countries " +
     $"([bold]{config.Checking.MaxConcurrency}[/] parallel)...\n");
 
-using var client  = new PSStoreClient(locales, auth);
+using var client = new PSStoreClient(locales, auth);
 using var storage = new PriceStorage(config.Storage.PriceHistoryDb, config.Storage.MaxHistoryDays);
-var notifier      = new Notifier(config.Notification);
+var notifier = new Notifier(config.Notification);
+if (OperatingSystem.IsWindows() && config.Notification.WindowsToast.Enabled)
+{
+    if (Notifier.IsWindowsToastSupported)
+        AnsiConsole.MarkupLine("[grey]✓ Windows toast notifications enabled[/]");
+    else
+        AnsiConsole.MarkupLine("[yellow]⚠ Windows toasts disabled: build lacks native Windows target[/]");
+}
 
 var startedAtUtc = DateTime.UtcNow;
 
@@ -80,6 +87,11 @@ storage.RecordRun(
 PrintSummaryTable(summaryRows, totalChecked, totalChanges);
 Logger.Info($"Done. Checked {totalChecked} game*country pairs, found {totalChanges} price change(s).");
 
+if (totalChanges > 0 && Notifier.IsWindowsToastSupported)
+{
+    await Task.Delay(1500);
+}
+
 static void PrintHelp()
 {
     AnsiConsole.Write(new Panel(
@@ -87,6 +99,7 @@ static void PrintHelp()
         "[deepskyblue1]--countries[/] CODE,CODE,...  Check only these country codes\n" +
         "[deepskyblue1]--list-countries[/]           Print all supported country codes and locales\n" +
         "[deepskyblue1]--stats[/]                    Show execution and price history statistics\n" +
+        "[deepskyblue1]--test-toast[/]               Send a test Windows toast notification\n" +
         "[deepskyblue1]--config[/] FILE              Config file path [grey](default: config.yaml)[/]\n" +
         "[deepskyblue1]--help[/]                     Show this help")
     {
@@ -154,7 +167,7 @@ static List<string> ResolveCountries(string[] args, AppConfig config, IReadOnlyD
 static void PrintCountries(IReadOnlyDictionary<string, string> locales, AppConfig config)
 {
     var source = config.Locales is { Count: > 0 } ? "[green]config.yaml[/]" : "[grey]built-in[/]";
-    var table  = new Table()
+    var table = new Table()
         .Border(TableBorder.Rounded)
         .AddColumn(new TableColumn("[bold]Code[/]").Centered())
         .AddColumn("[bold]Locale[/]")
@@ -239,8 +252,8 @@ static async Task<(int TotalChecked, int TotalChanges, int TotalSkipped, List<(s
     int totalChecked = 0;
     int totalChanges = 0;
     int totalSkipped = 0;
-    var summaryRows  = new List<(string Game, string Country, string OldPrice, string NewPrice, bool Changed)>();
-    var storageLock  = new object();
+    var summaryRows = new List<(string Game, string Country, string OldPrice, string NewPrice, bool Changed)>();
+    var storageLock = new object();
 
     try
     {
@@ -255,8 +268,8 @@ static async Task<(int TotalChecked, int TotalChanges, int TotalSkipped, List<(s
             }
 
             var validCountries = (game.Countries ?? countries).Where(c => locales.ContainsKey(c)).ToList();
-            var skipped        = new System.Collections.Concurrent.ConcurrentBag<string>();
-            var perGameRows    = new System.Collections.Concurrent.ConcurrentBag<(string, string, string, string, bool)>();
+            var skipped = new System.Collections.Concurrent.ConcurrentBag<string>();
+            var perGameRows = new System.Collections.Concurrent.ConcurrentBag<(string, string, string, string, bool)>();
 
             await AnsiConsole.Progress()
                 .AutoClear(false)
@@ -275,26 +288,46 @@ static async Task<(int TotalChecked, int TotalChanges, int TotalSkipped, List<(s
                             if (config.Checking.RequestDelay > 0)
                                 await Task.Delay(TimeSpan.FromSeconds(config.Checking.RequestDelay), ct);
 
-                            var price = await client.GetPriceAsync(game.Id, game.IdType, country, ct);
+                            var fetchResult = await client.GetPriceDetailedAsync(game.Id, game.IdType, country, ct);
+                            var price = fetchResult.Price;
                             task.Increment(1);
                             Interlocked.Increment(ref totalChecked);
 
-                            if (price == null)          { skipped.Add(country.ToUpperInvariant()); return; }
+                            var regionDesc = locales.TryGetValue(country, out var loc)
+                                ? $"{country.ToUpperInvariant()} ({loc})"
+                                : country.ToUpperInvariant();
+
+                            if (price == null)
+                            {
+                                Logger.Warn($"[{country.ToUpperInvariant()}] Could not retrieve price for '{game.Name}' in region {regionDesc}: {fetchResult.Message}");
+                                if (!string.IsNullOrEmpty(fetchResult.HtmlSnippet))
+                                    Logger.Debug($"[{country.ToUpperInvariant()}] Response snippet: {fetchResult.HtmlSnippet}");
+
+                                skipped.Add(country.ToUpperInvariant());
+                                return;
+                            }
+
                             if (!price.IsAvailable)
                             {
-                                Logger.Debug($"[{country.ToUpperInvariant()}] Not available");
+                                if (fetchResult.Status == FetchStatus.ErrorPage)
+                                    Logger.Warn($"[{country.ToUpperInvariant()}] '{game.Name}' not available in store for region {regionDesc}: {fetchResult.Message}");
+                                else
+                                    Logger.Debug($"[{country.ToUpperInvariant()}] Not available in store for region {regionDesc}: {fetchResult.Message}");
+
                                 lock (storageLock)
                                     storage.UpdatePrice(game.Id, country, price, game.Name);
                                 return;
                             }
-                            if (price.CurrentPrice == null) Logger.Warn($"[{country.ToUpperInvariant()}] Price could not be parsed");
+
+                            if (price.CurrentPrice == null)
+                                Logger.Warn($"[{country.ToUpperInvariant()}] Price could not be parsed for '{game.Name}' in region {regionDesc}");
 
                             bool hasChanged;
                             PriceInfo? oldPrice;
                             lock (storageLock)
                             {
                                 hasChanged = storage.HasPriceChanged(game.Id, country, price);
-                                oldPrice   = storage.GetLastPrice(game.Id, country);
+                                oldPrice = storage.GetLastPrice(game.Id, country);
                                 storage.UpdatePrice(game.Id, country, price, game.Name);
                             }
 
@@ -336,7 +369,7 @@ static void PrintStatistics(StorageStatistics stats, string dbPath)
 
     var runTable = new Table()
         .Border(TableBorder.Rounded)
-        .Title("[bold yellow] Execution History [/]" )
+        .Title("[bold yellow] Execution History [/]")
         .AddColumn("[bold]Metric[/]")
         .AddColumn("[bold]Value[/]");
 
@@ -354,7 +387,7 @@ static void PrintStatistics(StorageStatistics stats, string dbPath)
 
     var snapshotTable = new Table()
         .Border(TableBorder.Rounded)
-        .Title("[bold yellow] Price History [/]" )
+        .Title("[bold yellow] Price History [/]")
         .AddColumn("[bold]Metric[/]")
         .AddColumn("[bold]Value[/]");
 
@@ -373,7 +406,7 @@ static void PrintStatistics(StorageStatistics stats, string dbPath)
     {
         var discountsTable = new Table()
             .Border(TableBorder.Rounded)
-            .Title("[bold yellow] Top Recorded Discounts [/]" )
+            .Title("[bold yellow] Top Recorded Discounts [/]")
             .AddColumn("[bold]Game[/]")
             .AddColumn(new TableColumn("[bold]Country[/]").Centered())
             .AddColumn("[bold]Discount[/]")
@@ -440,7 +473,7 @@ static void PrintSummaryTable(
     }
 
     var statusColour = totalChanges > 0 ? "green" : "grey";
-    var statusMsg    = totalChanges > 0
+    var statusMsg = totalChanges > 0
         ? $"[bold green]{totalChanges} price change(s) found![/]"
         : "[grey]No price changes.[/]";
 

@@ -8,6 +8,48 @@ public class PSStoreParserTests
     // ─── __NEXT_DATA__ Apollo cache (Strategy 1) ──────────────────────────────
 
     [Fact]
+    public void ParsePrice_IgnoresPsPlusGameTrials_AndExtractsActualPurchasePrice()
+    {
+        const string html = """
+            <html><head>
+            <script id="env:test" type="application/json">
+            {
+                "trial": {
+                    "__typename": "Price",
+                    "basePrice": "Пробна версія гри",
+                    "discountedPrice": "Пробна версія гри",
+                    "applicability": "UPSELL",
+                    "tierLabel": "TIER_30",
+                    "serviceBranding": ["PS_PLUS"],
+                    "isFree": true,
+                    "isTiedToSubscription": true,
+                    "basePriceValue": 0,
+                    "currencyCode": "UAH"
+                },
+                "purchase": {
+                    "__typename": "Price",
+                    "basePrice": "UAH 1 499,00",
+                    "discountedPrice": "UAH 1 499,00",
+                    "applicability": "APPLICABLE",
+                    "isFree": false,
+                    "isTiedToSubscription": false,
+                    "basePriceValue": 149900,
+                    "currencyCode": "UAH"
+                }
+            }
+            </script>
+            </head></html>
+            """;
+
+        var price = PSStoreParser.ParsePrice(html);
+
+        Assert.NotNull(price);
+        Assert.False(price.IsFree);
+        Assert.Equal("UAH 1 499,00", price.BasePrice);
+        Assert.Equal("UAH", price.Currency);
+    }
+
+    [Fact]
     public void ParsePrice_ExtractsPrice_FromApolloCache_ByTypename()
     {
         // A minimal __NEXT_DATA__ blob that contains a price node with __typename
@@ -178,5 +220,45 @@ public class PSStoreParserTests
     {
         var result = PSStoreParser.ParseRegex("<html><body><p>hello</p></body></html>");
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void ParsePriceWithDiagnosis_IdentifiesErrorPage()
+    {
+        const string html = "<html><head><title>Error</title></head><body><div data-qa=\"error-page\">Something went wrong</div></body></html>";
+        var price = PSStoreParser.ParsePriceWithDiagnosis(html, out var diagnosis);
+
+        Assert.Null(price);
+        Assert.Contains("error page", diagnosis, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ParsePriceWithDiagnosis_IdentifiesWafBlock()
+    {
+        const string html = "<html><head><title>Access Denied</title></head><body>Reference #18.2b4d... Access Denied</body></html>";
+        var price = PSStoreParser.ParsePriceWithDiagnosis(html, out var diagnosis);
+
+        Assert.Null(price);
+        Assert.Contains("bot-protection", diagnosis, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ParsePrice_ExtractsPrice_FromModernEnvScript()
+    {
+        const string html = """
+            <html><head>
+            <script id="env:12345-abcde" type="application/json">
+            {"cache":{"Price:test":{"__typename":"Price","basePrice":"$59.99","discountedPrice":"$29.99","currencyCode":"USD","discountText":"-50%"}}}
+            </script>
+            </head></html>
+            """;
+
+        var result = PSStoreParser.ParsePrice(html);
+
+        Assert.NotNull(result);
+        Assert.Equal("$59.99", result.BasePrice);
+        Assert.Equal("$29.99", result.DiscountedPrice);
+        Assert.Equal("USD", result.Currency);
+        Assert.Equal(50, result.DiscountPercent);
     }
 }

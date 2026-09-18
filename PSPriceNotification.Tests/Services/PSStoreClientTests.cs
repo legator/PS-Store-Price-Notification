@@ -112,4 +112,60 @@ public class PSStoreClientTests
         Assert.True(PSStoreClient.DefaultLocales.ContainsKey("Gb"));
         Assert.Equal(PSStoreClient.DefaultLocales["us"], PSStoreClient.DefaultLocales["US"]);
     }
+
+    // ─── GetPriceDetailedAsync ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetPriceDetailedAsync_ReturnsParseFailedWithDiagnosis_OnBlankHtml()
+    {
+        using var client = new PSStoreClient(new FakeHttpMessageHandler(HttpStatusCode.OK, "<html><body><title>Test Page</title></body></html>"));
+        var result = await client.GetPriceDetailedAsync("PPSA123456_00", "concept", "us");
+
+        Assert.Equal(FetchStatus.ParseFailed, result.Status);
+        Assert.Null(result.Price);
+        Assert.NotNull(result.Diagnosis);
+        Assert.Contains("Unable to extract price", result.Diagnosis);
+    }
+
+    [Fact]
+    public async Task GetPriceDetailedAsync_ReturnsSuccess_OnValidHtml()
+    {
+        const string html = """
+            <html><head>
+            <script id="__NEXT_DATA__" type="application/json">
+            {"props":{"pageProps":{"price":{"__typename":"PriceReturned","basePrice":"$49.99","currencyCode":"USD"}}}}
+            </script>
+            </head></html>
+            """;
+
+        using var client = new PSStoreClient(new FakeHttpMessageHandler(HttpStatusCode.OK, html));
+        var result = await client.GetPriceDetailedAsync("PPSA123456_00", "concept", "us");
+
+        Assert.Equal(FetchStatus.Success, result.Status);
+        Assert.NotNull(result.Price);
+        Assert.Equal("$49.99", result.Price.BasePrice);
+    }
+
+    [Fact]
+    public async Task GetPriceDetailedAsync_ReturnsErrorPage_WithRegionAndMismatchHint()
+    {
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            var res = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                RequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://store.playstation.com/en-us/error?productId=EP9000-PPSA21567_00-DDE0000000000000&widgetErrorType=emptyRequiredBatarang&widgetStatusCode=204"),
+                Content = new StringContent("<html><body>Error</body></html>", System.Text.Encoding.UTF8, "text/html"),
+            };
+            return res;
+        });
+
+        using var client = new PSStoreClient(handler);
+        var result = await client.GetPriceDetailedAsync("EP9000-PPSA21567_00-DDE0000000000000", "product", "us");
+
+        Assert.Equal(FetchStatus.ErrorPage, result.Status);
+        Assert.NotNull(result.Price);
+        Assert.False(result.Price.IsAvailable);
+        Assert.Contains("code: 204", result.Message);
+        Assert.Contains("European region prefix 'EP'", result.Message);
+    }
 }
